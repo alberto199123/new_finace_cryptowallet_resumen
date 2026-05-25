@@ -1,11 +1,11 @@
-const CACHE_NAME = 'cryptowallet-cache-v1';
+const CACHE_NAME = 'cryptowallet-cache-v3';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
-    './manifest.json'
+    './manifest.json',
+    './icono-ovni.png'
 ];
 
-// Evento de instalación: Almacena los archivos estáticos
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
@@ -14,7 +14,6 @@ self.addEventListener('install', (event) => {
     self.skipWaiting();
 });
 
-// Evento de activación: Limpia cachés antiguos si se actualiza la versión
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
@@ -30,14 +29,24 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
-// Evento fetch: Sirve desde caché si está disponible, sino va a la red
 self.addEventListener('fetch', (event) => {
-    // Excluye las peticiones a Supabase y APIs externas de la caché estática
     if (!event.request.url.startsWith('http')) return;
     if (event.request.url.includes('supabase.co')) return;
 
-    event.respondWith(
-        caches.match(event.request)
-        .then((response) => response || fetch(event.request))
-    );
+    if (event.request.mode === 'navigate' || event.request.url.includes('manifest.json')) {
+        event.respondWith(
+            fetch(event.request)
+                .then((response) => {
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+                    return response;
+                })
+                .catch(() => caches.match(event.request))
+        );
+    } else {
+        event.respondWith(
+            caches.match(event.request)
+                .then((response) => response || fetch(event.request))
+        );
+    }
 });
