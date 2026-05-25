@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoWallet - Consola de Comando</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --fondo: #f0f4f8;
+            --tarjeta: rgba(255, 255, 255, 0.92);
+            --tarjeta-2: rgba(255, 255, 255, 0.96);
+            --electrico-azul: #2563eb;
+            --electrico-verde: #059669;
+            --electrico-rojo: #dc2626;
+            --electrico-ambar: #d97706;
+            --excel-solid: #107c10;
+            --texto: #1e293b;
+            --muted: #64748b;
+            --fuente-titulo: 'Orbitron', sans-serif;
+            --fuente-datos: 'Share Tech Mono', monospace;
+            --borde: rgba(37, 99, 235, 0.18);
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            background:
+                radial-gradient(circle at top, rgba(37,99,235,0.08), transparent 28%),
+                radial-gradient(circle at bottom left, rgba(5,150,105,0.05), transparent 24%),
+                linear-gradient(180deg, #f0f4f8 0%, #e2e8f0 50%, #f0f4f8 100%);
+            color: var(--texto);
+            font-family: var(--fuente-datos);
+            margin: 0;
+            padding: 16px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(rgba(37,99,235,.1), rgba(37,99,235,.04) 2px, transparent 34px),
+                radial-gradient(rgba(5,150,105,.08), rgba(37,99,235,.03) 1px, transparent 24px);
+            background-size: 520px 520px, 280px 280px;
+            opacity: .4;
+            z-index: -3;
+            pointer-events: none;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                linear-gradient(90deg, transparent, rgba(37,99,235,.03), transparent),
+                repeating-linear-gradient(180deg, rgba(37,99,235,.02) 0 1px, transparent 1px 5px);
+            z-index: -2;
+            pointer-events: none;
+        }
+
+        .chip-spacial {
+            position: fixed;
+            bottom: -50px; right: -50px;
+            width: 200px; height: 200px;
+            background: rgba(255,255,255,0.9);
+            border: 10px solid var(--electrico-rojo);
+            border-radius: 60%;
+            box-shadow: 0 0 80px rgba(220,38,38,0.3);
+            z-index: -1;
+            overflow: hidden;
+            animation: chipPulse 5s infinite;
+        }
+
+        .chip-spacial::after {
+            content: 'ALBERTO QUANTUM CORE';
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: var(--fuente-titulo);
+            color: var(--electrico-verde);
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        @keyframes chipPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); box-shadow: 0 0 80px rgba(37,99,235,0.3); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .scanner-line {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 5px;
+            background: linear-gradient(to bottom, transparent, var(--electrico-azul), transparent);
+            box-shadow: 0 0 20px rgba(37,99,235,0.3);
+            opacity: 0.6;
+            z-index: 1000;
+            pointer-events: none;
+            animation: scan 10s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { top: -10px; opacity: 0; }
+            5% { opacity: 0.6; }
+            95% { opacity: 0.6; }
+            100% { top: 100vh; opacity: 0; }
+        }
+
+        .cable { position: fixed; height: 2px; width: 100vw; opacity: 0.2; animation: flowEnergy 3s linear infinite; }
+        @keyframes flowEnergy { 0% { background-position: -100vw; } 100% { background-position: 100vw; } }
+
+        .shell {
+            max-width: 1280px;
+            margin: 0 auto;
+            border: 1px solid rgba(37,99,235,.14);
+            border-radius: 32px;
+            padding: 18px;
+            background: rgba(255,255,255,.7);
+            box-shadow: 0 0 50px rgba(37,99,235,.08), inset 0 0 0 1px rgba(255,255,255,.5);
+            backdrop-filter: blur(12px);
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            margin: 0;
+            font-family: var(--fuente-titulo);
+            color: var(--electrico-azul);
+            font-size: clamp(1.8rem, 4vw, 2.7rem);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            text-shadow: 0 0 18px rgba(37,99,235,.2);
+        }
+
+        .subhead {
+            color: var(--muted);
+            font-size: .82rem;
+            text-transform: uppercase;
+            letter-spacing: .16em;
+        }
+
+        .hud-badges {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .hud-badges span {
+            padding: 9px 12px;
+            border: 1px solid var(--borde);
+            border-radius: 999px;
+            background: rgba(255,255,255,.85);
+            color: var(--muted);
+            font-size: .72rem;
+            text-transform: uppercase;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .card {
+            background: linear-gradient(180deg, rgba(255,255,255,.6), transparent), var(--tarjeta);
+            border: 1px solid var(--borde);
+            border-radius: 24px;
+            padding: 18px;
+            box-shadow: 0 18px 40px rgba(0,0,0,.1);
+        }
+
+        .card h2 {
+            margin: 0 0 6px;
+            font-family: var(--fuente-titulo);
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .card-copy {
+            color: var(--muted);
+            font-size: .8rem;
+            margin: 0 0 14px;
+        }
+
+        .resumen-superior {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .box {
+            padding: 14px;
+            border-radius: 18px;
+            text-align: center;
+            border: 1px solid rgba(37,99,235,.1);
+            background: rgba(255,255,255,.5);
+        }
+
+        .box small {
+            display: block;
+            color: var(--muted);
+            font-size: .68rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .box p {
+            margin: 8px 0 0;
+            font-size: 1.35rem;
+            font-weight: 900;
+        }
+
+        canvas { max-width: 100%; height: 320px !important; }
+
+        .input-group { margin-bottom: 12px; }
+        .input-label {
+            font-size: .76rem;
+            display: block;
+            margin-bottom: 6px;
+            color: var(--electrico-azul);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px 14px;
+            background: rgba(255,255,255,.95);
+            border: 1px solid rgba(37,99,235,.16);
+            color: var(--texto);
+            border-radius: 14px;
+            font-family: var(--fuente-datos);
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: rgba(37,99,235,.6);
+            box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+        }
+
+        .btn-main, .btn-excel, .btn-soft, .btn-tab, .btn-danger, .btn-warning {
+            width: 100%;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            padding: 13px 14px;
+            font-family: var(--fuente-titulo);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+        }
+
+        .btn-main {
+            background: linear-gradient(135deg, #2563eb, #3b82f6);
+            color: white;
+            margin-top: 4px;
+        }
+
+        .btn-excel {
+            background: linear-gradient(135deg, #107c10, #22c55e) !important;
+            color: white !important;
+            margin-top: 10px;
+        }
+
+        .btn-soft {
+            margin-top: 14px;
+            background: transparent;
+            color: #64748b;
+            border: 1px solid rgba(37,99,235,.1);
+            font-size: .72rem;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc2626, #ef4444);
+            color: white;
+            margin-top: 10px;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #d97706, #f59e0b);
+            color: white;
+            margin-top: 10px;
+        }
+
+        .btn-tab {
+            background: rgba(255,255,255,.6);
+            color: var(--muted);
+            border: 1px solid var(--borde);
+            margin-bottom: 8px;
+            transition: all 0.3s;
+        }
+        .btn-tab.active {
+            background: linear-gradient(135deg, rgba(37,99,235,.15), rgba(5,150,105,.08));
+            color: var(--electrico-azul);
+            border-color: var(--electrico-azul);
+            box-shadow: 0 0 20px rgba(37,99,235,.12);
+        }
+
+        .chart-frame {
+            border: 1px solid rgba(37,99,235,.1);
+            border-radius: 22px;
+            padding: 14px;
+            background: rgba(255,255,255,.65);
+        }
+
+        #historial {
+            margin-top: 16px;
+            max-height: 280px;
+            overflow-y: auto;
+            display: grid;
+            gap: 10px;
+        }
+
+        .hist-item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: rgba(255,255,255,.5);
+            border: 1px solid rgba(37,99,235,.08);
+        }
+
+        .hist-item small { color: var(--muted); }
+        .delete-btn {
+            background: none;
+            border: 1px solid rgba(220,38,38,.18);
+            color: var(--electrico-rojo);
+            border-radius: 10px;
+            padding: 6px 8px;
+            cursor: pointer;
+        }
+
+        .login-screen {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(37,99,235,.08), transparent 30%), linear-gradient(180deg, #f0f4f8 0%, #e2e8f0 100%);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .login-card {
+            width: min(100%, 430px);
+            padding: 28px;
+            border-radius: 28px;
+            background: var(--tarjeta-2);
+            border: 1px solid var(--borde);
+            box-shadow: 0 0 60px rgba(37,99,235,.1);
+            text-align: center;
+        }
+
+        .login-card img {
+            width: 88px;
+            margin-bottom: 12px;
+            filter: drop-shadow(0 0 16px rgba(37,99,235,.15));
+        }
+
+        .login-card h2 {
+            margin: 0 0 8px;
+            color: var(--electrico-azul);
+            font-family: var(--fuente-titulo);
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .login-card p {
+            color: var(--muted);
+            font-size: .88rem;
+            line-height: 1.5;
+        }
+
+        #error-msg {
+            color: var(--electrico-rojo);
+            margin-top: 12px;
+            display: none;
+        }
+
+        /* DASHBOARD */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        @media (min-width: 768px) {
+            .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        .kpi-cyber {
+            padding: 16px;
+            border-radius: 18px;
+            border: 1px solid rgba(37,99,235,.12);
+            background: rgba(255,255,255,.7);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,.06);
+            transition: transform 0.2s;
+        }
+        .kpi-cyber:hover { transform: translateY(-2px); }
+
+        .kpi-cyber::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+        .kpi-cyber.venta::before { background: var(--electrico-verde); box-shadow: 0 0 10px rgba(5,150,105,.3); }
+        .kpi-cyber.compra::before { background: var(--electrico-ambar); box-shadow: 0 0 10px rgba(217,119,6,.3); }
+        .kpi-cyber.gasto::before { background: var(--electrico-rojo); box-shadow: 0 0 10px rgba(220,38,38,.3); }
+        .kpi-cyber.ganancia::before { background: var(--electrico-azul); box-shadow: 0 0 10px rgba(37,99,235,.3); }
+
+        .kpi-cyber .kpi-label {
+            font-size: .65rem;
+            text-transform: uppercase;
+            letter-spacing: .1em;
+            color: var(--muted);
+            margin-bottom: 6px;
+            font-family: var(--fuente-titulo);
+        }
+        .kpi-cyber .kpi-value {
+            font-size: 1.3rem;
+            font-weight: 900;
+            font-family: var(--fuente-datos);
+        }
+        .kpi-cyber.venta .kpi-value { color: var(--electrico-verde); text-shadow: 0 0 10px rgba(5,150,105,.15); }
+        .kpi-cyber.compra .kpi-value { color: var(--electrico-ambar); text-shadow: 0 0 10px rgba(217,119,6,.15); }
+        .kpi-cyber.gasto .kpi-value { color: var(--electrico-rojo); text-shadow: 0 0 10px rgba(220,38,38,.15); }
+        .kpi-cyber.ganancia .kpi-value { color: var(--electrico-azul); text-shadow: 0 0 10px rgba(37,99,235,.15); }
+        .kpi-cyber .kpi-delta {
+            font-size: .7rem;
+            margin-top: 4px;
+            color: var(--muted);
+        }
+
+        .chart-grid-dash {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        @media (min-width: 900px) {
+            .chart-grid-dash { grid-template-columns: 1fr 1fr; }
+        }
+
+        .chart-cyber {
+            border: 1px solid rgba(37,99,235,.1);
+            border-radius: 22px;
+            padding: 16px;
+            background: rgba(255,255,255,.65);
+            box-shadow: 0 4px 12px rgba(0,0,0,.06);
+        }
+        .chart-cyber .chart-title {
+            font-family: var(--fuente-titulo);
+            font-size: .75rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: var(--electrico-azul);
+            margin-bottom: 12px;
+            text-shadow: 0 0 8px rgba(37,99,235,.1);
+        }
+        .chart-cyber canvas { max-height: 260px !important; }
+
+        .fin-table-cyber {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .8rem;
+        }
+        .fin-table-cyber th {
+            padding: 10px;
+            text-align: center;
+            text-transform: uppercase;
+            font-size: .65rem;
+            letter-spacing: .08em;
+            color: var(--muted);
+            border-bottom: 1px solid rgba(37,99,235,.2);
+            font-family: var(--fuente-titulo);
+        }
+        .fin-table-cyber td {
+            padding: 10px;
+            text-align: center;
+            border-bottom: 1px solid rgba(37,99,235,.06);
+            font-family: var(--fuente-datos);
+        }
+        .fin-table-cyber td:first-child {
+            text-align: left;
+            font-weight: 700;
+            color: var(--electrico-azul);
+        }
+        .fin-table-cyber .num-venta { color: var(--electrico-verde); }
+        .fin-table-cyber .num-compra { color: var(--electrico-ambar); }
+        .fin-table-cyber .num-gasto { color: var(--electrico-rojo); }
+        .fin-table-cyber .num-ganancia { color: var(--electrico-azul); font-weight: 700; }
+        .fin-table-cyber tfoot td {
+            border-top: 2px solid rgba(37,99,235,.2);
+            font-weight: 900;
+            background: rgba(37,99,235,.04);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(37,99,235,.1);
+            border-top-color: var(--electrico-azul);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--muted);
+        }
+
+        .alert-box {
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            font-size: .85rem;
+        }
+        .alert-info {
+            background: rgba(37,99,235,.08);
+            border: 1px solid rgba(37,99,235,.2);
+            color: var(--electrico-azul);
+        }
+        .alert-warning {
+            background: rgba(217,119,6,.08);
+            border: 1px solid rgba(217,119,6,.2);
+            color: var(--electrico-ambar);
+        }
+        .alert-success {
+            background: rgba(5,150,105,.08);
+            border: 1px solid rgba(5,150,105,.2);
+            color: var(--electrico-verde);
+        }
+
+        @media (max-width: 900px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 760px) {
+            body { padding: 10px; }
+            .resumen-superior { grid-template-columns: 1fr; }
+            .topbar { align-items: flex-start; }
+            .hist-item { grid-template-columns: 1fr; }
+        }
+    </style>
+<base target="_blank">
+</head>
+<body>
+<div id="login-screen" class="login-screen">
+    <div class="login-card">
+        <div style="font-size: 3rem; margin-bottom: 12px;">🛸</div>
+        <h2>Acceso Restringido</h2>
+        <p>Ingresa el código maestro para activar la consola orbital del taller.</p>
+        <input type="password" id="pass-input" placeholder="CÓDIGO DE ACCESO" autocomplete="off" style="margin-bottom: 12px;">
+        <button class="btn-main" onclick="verificarClave()" id="btn-login">Entrar</button>
+        <p id="error-msg" style="display: none; color: #dc2626; margin-top: 12px; font-weight: 600;">Código incorrecto</p>
+    </div>
+</div>
+
+<div id="main-content" style="display:none;">
+    <div class="scanner-line"></div>
+    <div class="chip-spacial"></div>
+    <div class="cable" style="top: 20vh; background:linear-gradient(90deg, transparent, var(--electrico-azul), transparent);"></div>
+    <div class="cable" style="top: 80vh; background:linear-gradient(90deg, transparent, var(--electrico-verde), transparent);"></div>
+
+    <div class="shell">
+        <div class="topbar">
+            <div>
+                <h1>CryptoWallet-Alberto.D</h1>
+                <div class="subhead">Centro de control financiero interestelar</div>
+            </div>
+            <div class="hud-badges">
+                <span>Radar Activo</span>
+                <span>Base Sincronizada</span>
+                <span>Modo Taller</span>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px;">
+            <button class="btn-tab active" onclick="switchTab('registro')" id="tab-btn-registro">📝 Registro</button>
+            <button class="btn-tab" onclick="switchTab('rendimiento')" id="tab-btn-rendimiento">📊 Rendimiento</button>
+            <button class="btn-tab" onclick="switchTab('dashboard')" id="tab-btn-dashboard">📈 Dashboard</button>
+        </div>
+
+        <!-- TAB 1: REGISTRO -->
+        <div id="tab-registro" class="tab-content active">
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>Nuevo Registro</h2>
+                    <p class="card-copy">Captura ingresos, compras y gastos desde la cabina principal.</p>
+
+                    <div class="input-group">
+                        <label class="input-label">Subcategoría</label>
+                        <select id="subcategoria">
+                            <option value="General">General</option>
+                            <option value="Alimentación">Alimentación</option>
+                            <option value="Transporte">Transporte</option>
+                            <option value="Criptos">Criptos</option>
+                            <option value="Servicios">Servicios</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label class="input-label">Categoría</label>
+                        <select id="tipo">
+                            <option value="venta">➕ Ingreso / Venta</option>
+                            <option value="compra">➖ Compra Material</option>
+                            <option value="gasto">💸 Gasto General</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label class="input-label">Concepto</label>
+                        <input type="text" id="concepto" placeholder="Ej: Reparación ventana">
+                    </div>
+
+                    <div class="input-group">
+                        <label class="input-label">Monto CLP ($)</label>
+                        <input type="number" id="monto" placeholder="Ej: 75000">
+                    </div>
+
+                    <button class="btn-main" onclick="registrar()">💾 Guardar Registro</button>
+                    <button class="btn-excel" onclick="exportarExcel()">📥 Excel Detallado</button>
+                    <div id="historial"></div>
+                    <button class="btn-soft" onclick="reiniciarMes()">❌ Limpiar datos fin de mes</button>
+                </div>
+
+                <div class="card">
+                    <h2>Panel de Rendimiento</h2>
+                    <p class="card-copy">Lectura instantánea de ingresos, egresos y utilidad neta del taller.</p>
+
+                    <div class="resumen-superior">
+                        <div class="box"><small>Ingresos</small><p id="txtVentas" style="color:var(--electrico-verde);">$0</p></div>
+                        <div class="box"><small>Egresos</small><p id="txtEgresos" style="color:var(--electrico-rojo);">$0</p></div>
+                        <div class="box"><small>Utilidad Neta</small><p id="txtUtilidad" style="color:var(--electrico-azul);">$0</p></div>
+                    </div>
+
+                    <div class="chart-frame">
+                        <canvas id="graficaPrincipal"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: RENDIMIENTO -->
+        <div id="tab-rendimiento" class="tab-content">
+            <div class="card">
+                <h2>Análisis de Rendimiento</h2>
+                <p class="card-copy">Detalle completo de todos los movimientos registrados en la nube.</p>
+                <div id="rendimiento-content">
+                    <div class="empty-state">
+                        <p>Cargando datos desde la base orbital...</p>
+                        <div class="loading-spinner" style="margin-top: 12px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: DASHBOARD FINANCIERO -->
+        <div id="tab-dashboard" class="tab-content">
+            <div class="card">
+                <h2 style="color:var(--electrico-azul);text-shadow:0 0 12px rgba(37,99,235,.2);">📈 Dashboard Financiero Anual</h2>
+                <p class="card-copy">Visión histórica automática. Los datos se acumulan mes a mes hasta diciembre.</p>
+
+                <!-- Alerta informativa -->
+                <div class="alert-box alert-info" id="dashAlert">
+                    💡 Este dashboard muestra los meses cerrados (guardados en resumen_mensual) + el mes actual (en movimientos).
+                </div>
+
+                <!-- Botón Cerrar Mes -->
+                <div style="margin-bottom: 20px;">
+                    <button class="btn-warning" onclick="cerrarMes()">🔒 CERRAR MES + BACKUP</button>
+                    <p style="font-size: .75rem; color: var(--muted); margin-top: 6px;">
+                        Calcula totales del mes, guarda en histórico, descarga Excel y limpia movimientos.
+                    </p>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="kpi-grid">
+                    <div class="kpi-cyber venta">
+                        <div class="kpi-label">Total Ventas</div>
+                        <div class="kpi-value" id="kpiVenta">$0</div>
+                        <div class="kpi-delta" id="deltaVenta">—</div>
+                    </div>
+                    <div class="kpi-cyber compra">
+                        <div class="kpi-label">Total Compras</div>
+                        <div class="kpi-value" id="kpiCompra">$0</div>
+                        <div class="kpi-delta" id="deltaCompra">—</div>
+                    </div>
+                    <div class="kpi-cyber gasto">
+                        <div class="kpi-label">Total Gastos</div>
+                        <div class="kpi-value" id="kpiGasto">$0</div>
+                        <div class="kpi-delta" id="deltaGasto">—</div>
+                    </div>
+                    <div class="kpi-cyber ganancia">
+                        <div class="kpi-label">Ganancia Neta</div>
+                        <div class="kpi-value" id="kpiGanancia">$0</div>
+                        <div class="kpi-delta" id="deltaGanancia">—</div>
+                    </div>
+                </div>
+
+                <!-- Gráficas -->
+                <div class="chart-grid-dash">
+                    <div class="chart-cyber">
+                        <div class="chart-title">Comparativo Mensual</div>
+                        <canvas id="chartComparativo"></canvas>
+                    </div>
+                    <div class="chart-cyber">
+                        <div class="chart-title">Evolución Ganancia Neta</div>
+                        <canvas id="chartGanancia"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-grid-dash" style="grid-template-columns: 1fr 1fr;">
+                    <div class="chart-cyber">
+                        <div class="chart-title">Distribución Egresos por Categoría</div>
+                        <canvas id="chartDonaEgresos"></canvas>
+                    </div>
+                    <div class="chart-cyber">
+                        <div class="chart-title">Distribución Ingresos por Categoría</div>
+                        <canvas id="chartDonaIngresos"></canvas>
+                    </div>
+                </div>
+
+                <!-- Tabla Resumen -->
+                <div class="chart-cyber" style="margin-top: 16px;">
+                    <div class="chart-title">Resumen Mensual Detallado</div>
+                    <div style="overflow-x: auto;">
+                        <table class="fin-table-cyber">
+                            <thead>
+                                <tr>
+                                    <th>Mes</th>
+                                    <th>Ventas</th>
+                                    <th>Compras</th>
+                                    <th>Gastos</th>
+                                    <th>Ganancia Neta</th>
+                                    <th>Margen %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="finBody"></tbody>
+                            <tfoot id="finFoot"></tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const SUPABASE_URL = 'https://kczvfdwvbarmwplbxjta.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_4jmmQT8cRJ3K17HlTPo7Rw_hhn7co4l';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const sonidoAcceso = new Audio("https://actions.google.com/sounds/v1/science_fiction/low_poly_bleep.ogg");
+    const sonidoError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+    const CLAVE_MAESTRA = "1991";
+    let movimientos = [];
+    let miGrafica, chartComp, chartGan, chartDonaEgr, chartDonaIng;
+    const formatoCLP = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 });
+
+    /* ─── Login ─── */
+    function verificarClave() {
+        try {
+            const input = document.getElementById('pass-input').value;
+            const error = document.getElementById('error-msg');
+            const btn = document.getElementById('btn-login');
+
+            console.log('Intentando login con:', input);
+
+            if (input === CLAVE_MAESTRA) {
+                error.style.display = 'none';
+                btn.textContent = '✅ ACCESO CONCEDIDO';
+                btn.style.background = 'linear-gradient(135deg, #059669, #10b981)';
+
+                try { sonidoAcceso.play(); } catch(e) { console.log('Sonido no disponible'); }
+
+                setTimeout(() => {
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('main-content').style.display = 'block';
+                    sessionStorage.setItem('acceso_ovni', 'true');
+                    cargarDatosDesdeNube();
+                }, 800);
+            } else {
+                error.style.display = 'block';
+                error.textContent = '❌ Código incorrecto. Intenta: 1991';
+                btn.style.animation = 'shake 0.5s';
+
+                try { sonidoError.play(); } catch(e) { console.log('Sonido no disponible'); }
+
+                setTimeout(() => {
+                    btn.style.animation = '';
+                }, 500);
+            }
+        } catch(err) {
+            console.error('Error en verificarClave:', err);
+            alert('Error: ' + err.message);
+        }
+    }
+
+    async function cargarDatosDesdeNube() {
+        const { data, error } = await _supabase.from('movimientos').select('*').order('created_at', { ascending: true });
+        if (!error) {
+            movimientos = data || [];
+            actualizarInterfaz();
+        }
+    }
+
+    window.onload = () => {
+        if (sessionStorage.getItem('acceso_ovni') === 'true') {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+            cargarDatosDesdeNube();
+        }
+    };
+
+    document.getElementById('pass-input').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') verificarClave();
+    });
+
+    /* ─── Tabs ─── */
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.btn-tab').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        document.getElementById('tab-btn-' + tab).classList.add('active');
+        if (tab === 'dashboard') renderDashboard();
+        if (tab === 'rendimiento') renderRendimiento();
+    }
+
+    Chart.register(ChartDataLabels);
+
+    /* ─── Registro / Rendimiento (original) ─── */
+    function actualizarInterfaz() {
+        let v = 0, eg = 0;
+        const totalesPorSub = {};
+        const hist = document.getElementById('historial');
+
+        if (movimientos.length === 0) {
+            hist.innerHTML = '<div class="hist-item"><div><strong>LOG DE ACTIVIDAD</strong><br><small>No hay movimientos registrados todavía.</small></div></div>';
+        } else {
+            hist.innerHTML = movimientos.slice().reverse().map((m) => {
+                const color = m.tipo === 'venta' ? 'var(--electrico-verde)' : 'var(--electrico-rojo)';
+                if (m.tipo === 'venta') {
+                    v += m.monto;
+                } else {
+                    eg += m.monto;
+                    const cat = m.subcategoria || 'General';
+                    totalesPorSub[cat] = (totalesPorSub[cat] || 0) + m.monto;
+                }
+                const fechaLabel = m.created_at ? new Date(m.created_at).toLocaleDateString('es-CL') : '---';
+                return `
+                    <div class="hist-item">
+                        <div>
+                            <strong>${fechaLabel} · ${m.concepto}</strong><br>
+                            <small>${m.subcategoria || 'General'} | <span style="color:${color};">${formatoCLP.format(m.monto)}</span></small>
+                        </div>
+                        <button class="delete-btn" onclick="borrarRegistro('${m.id}')">Eliminar</button>
+                    </div>`;
+            }).join('');
+        }
+
+        document.getElementById('txtVentas').innerText = formatoCLP.format(v);
+        document.getElementById('txtEgresos').innerText = formatoCLP.format(eg);
+        document.getElementById('txtUtilidad').innerText = formatoCLP.format(v - eg);
+        renderizarGraficaDetallada(v, totalesPorSub);
+    }
+
+    function renderizarGraficaDetallada(totalIngresos, gastosAgrupados) {
+        const ctx = document.getElementById('graficaPrincipal').getContext('2d');
+        const labels = ['INGRESOS', ...Object.keys(gastosAgrupados)];
+        const data = [totalIngresos, ...Object.values(gastosAgrupados)];
+        const colors = ['#059669', '#dc2626', '#d97706', '#2563eb', '#7c3aed', '#db2777'];
+
+        if (miGrafica) miGrafica.destroy();
+        miGrafica = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{ data, backgroundColor: colors.slice(0, data.length), borderRadius: 8, borderSkipped: false }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(30,41,59,.94)',
+                        borderColor: 'rgba(37,99,235,.18)',
+                        borderWidth: 1,
+                        callbacks: { label: (context) => formatoCLP.format(context.raw) }
+                    },
+                    datalabels: {
+                        color: '#1e293b',
+                        font: { family: 'Share Tech Mono', size: 10 },
+                        formatter: (value) => formatoCLP.format(value)
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#64748b', display: false }, grid: { color: 'rgba(0,0,0,.06)' } },
+                    y: { ticks: { color: '#2563eb', font: { family: 'Orbitron', size: 9 } }, grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       DASHBOARD ANUAL - LEE DE resumen_mensual + movimientos
+       ═══════════════════════════════════════════════════════════════ */
+    async function renderDashboard() {
+        document.getElementById('kpiVenta').textContent = '...';
+        document.getElementById('kpiCompra').textContent = '...';
+        document.getElementById('kpiGasto').textContent = '...';
+        document.getElementById('kpiGanancia').textContent = '...';
+
+        // 1. Traer datos históricos de resumen_mensual
+        const { data: historico, error: errHist } = await _supabase
+            .from('resumen_mensual')
+            .select('*')
+            .order('mes', { ascending: true });
+
+        // 2. Traer datos del mes actual de movimientos
+        const { data: actual, error: errAct } = await _supabase
+            .from('movimientos')
+            .select('*');
+
+        if ((errHist && errAct) || ((!historico || historico.length === 0) && (!actual || actual.length === 0))) {
+            document.getElementById('finBody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">No hay datos en la base orbital todavía. Empieza a registrar movimientos en la pestaña Registro.</td></tr>';
+            document.getElementById('kpiVenta').textContent = '$0';
+            document.getElementById('kpiCompra').textContent = '$0';
+            document.getElementById('kpiGasto').textContent = '$0';
+            document.getElementById('kpiGanancia').textContent = '$0';
+            return;
+        }
+
+        // 3. Procesar datos históricos
+        const datosMeses = [];
+        const gastosPorSub = {};
+        const ventasPorSub = {};
+
+        if (historico && historico.length > 0) {
+            historico.forEach(h => {
+                datosMeses.push({
+                    mes: h.mes,
+                    venta: h.venta,
+                    compra: h.compras,
+                    gasto: h.gasto,
+                    ganancia: h.ganancia
+                });
+            });
+        }
+
+        // 4. Procesar datos del mes actual (si existen)
+        let mesActualVenta = 0, mesActualCompra = 0, mesActualGasto = 0;
+        if (actual && actual.length > 0) {
+            const ahora = new Date();
+            const mesKey = `${String(ahora.getMonth() + 1).padStart(2, '0')}/${ahora.getFullYear()}`;
+
+            actual.forEach(m => {
+                if (m.tipo === 'venta') {
+                    mesActualVenta += m.monto;
+                    const cat = m.subcategoria || 'General';
+                    ventasPorSub[cat] = (ventasPorSub[cat] || 0) + m.monto;
+                } else if (m.tipo === 'compra') {
+                    mesActualCompra += m.monto;
+                    const cat = m.subcategoria || 'General';
+                    gastosPorSub[cat] = (gastosPorSub[cat] || 0) + m.monto;
+                } else if (m.tipo === 'gasto') {
+                    mesActualGasto += m.monto;
+                    const cat = m.subcategoria || 'General';
+                    gastosPorSub[cat] = (gastosPorSub[cat] || 0) + m.monto;
+                }
+            });
+
+            // Solo agregar mes actual si tiene datos
+            if (mesActualVenta > 0 || mesActualCompra > 0 || mesActualGasto > 0) {
+                datosMeses.push({
+                    mes: mesKey,
+                    venta: mesActualVenta,
+                    compra: mesActualCompra,
+                    gasto: mesActualGasto,
+                    ganancia: mesActualVenta - mesActualCompra - mesActualGasto
+                });
+            }
+        }
+
+        // 5. Calcular totales acumulados
+        const totalVenta = datosMeses.reduce((s, d) => s + d.venta, 0);
+        const totalCompra = datosMeses.reduce((s, d) => s + d.compra, 0);
+        const totalGasto = datosMeses.reduce((s, d) => s + d.gasto, 0);
+        const totalGanancia = datosMeses.reduce((s, d) => s + d.ganancia, 0);
+
+        // 6. Actualizar KPIs
+        document.getElementById('kpiVenta').textContent = formatoCLP.format(totalVenta);
+        document.getElementById('kpiCompra').textContent = formatoCLP.format(totalCompra);
+        document.getElementById('kpiGasto').textContent = formatoCLP.format(totalGasto);
+        document.getElementById('kpiGanancia').textContent = formatoCLP.format(totalGanancia);
+
+        // Deltas
+        if (datosMeses.length >= 2) {
+            const curr = datosMeses[datosMeses.length - 1];
+            const prev = datosMeses[datosMeses.length - 2];
+            const pct = (a, b) => b ? ((a - b) / b * 100).toFixed(1) + '%' : '—';
+            const arrow = (a, b) => a >= b ? '▲' : '▼';
+            document.getElementById('deltaVenta').textContent = `${arrow(curr.venta, prev.venta)} ${pct(curr.venta, prev.venta)} vs mes ant.`;
+            document.getElementById('deltaCompra').textContent = `${arrow(curr.compra, prev.compra)} ${pct(curr.compra, prev.compra)} vs mes ant.`;
+            document.getElementById('deltaGasto').textContent = `${arrow(curr.gasto, prev.gasto)} ${pct(curr.gasto, prev.gasto)} vs mes ant.`;
+            document.getElementById('deltaGanancia').textContent = `${arrow(curr.ganancia, prev.ganancia)} ${pct(curr.ganancia, prev.ganancia)} vs mes ant.`;
+        } else {
+            document.getElementById('deltaVenta').textContent = datosMeses.length === 1 ? 'Primer mes' : 'Sin datos';
+            document.getElementById('deltaCompra').textContent = datosMeses.length === 1 ? 'Primer mes' : 'Sin datos';
+            document.getElementById('deltaGasto').textContent = datosMeses.length === 1 ? 'Primer mes' : 'Sin datos';
+            document.getElementById('deltaGanancia').textContent = datosMeses.length === 1 ? 'Primer mes' : 'Sin datos';
+        }
+
+        // 7. Tabla resumen
+        const tbody = document.getElementById('finBody');
+        const tfoot = document.getElementById('finFoot');
+        tbody.innerHTML = '';
+        datosMeses.forEach(d => {
+            const margen = d.venta ? ((d.ganancia / d.venta) * 100).toFixed(1) : 0;
+            tbody.innerHTML += `
+                <tr>
+                    <td>${d.mes}</td>
+                    <td class="num-venta">${formatoCLP.format(d.venta)}</td>
+                    <td class="num-compra">${formatoCLP.format(d.compra)}</td>
+                    <td class="num-gasto">${formatoCLP.format(d.gasto)}</td>
+                    <td class="num-ganancia">${formatoCLP.format(d.ganancia)}</td>
+                    <td>${margen}%</td>
+                </tr>`;
+        });
+        const margenTotal = totalVenta ? ((totalGanancia / totalVenta) * 100).toFixed(1) : 0;
+        tfoot.innerHTML = `
+            <tr>
+                <td>ACUMULADO</td>
+                <td class="num-venta">${formatoCLP.format(totalVenta)}</td>
+                <td class="num-compra">${formatoCLP.format(totalCompra)}</td>
+                <td class="num-gasto">${formatoCLP.format(totalGasto)}</td>
+                <td class="num-ganancia">${formatoCLP.format(totalGanancia)}</td>
+                <td>${margenTotal}%</td>
+            </tr>`;
+
+        // 8. Gráfica Comparativa
+        const meses = datosMeses.map(d => d.mes);
+        const ctxComp = document.getElementById('chartComparativo').getContext('2d');
+        if (chartComp) chartComp.destroy();
+        chartComp = new Chart(ctxComp, {
+            type: 'bar',
+            data: {
+                labels: meses,
+                datasets: [
+                    { label: 'Ventas', data: datosMeses.map(d => d.venta), backgroundColor: '#059669', borderRadius: 6 },
+                    { label: 'Compras', data: datosMeses.map(d => d.compra), backgroundColor: '#d97706', borderRadius: 6 },
+                    { label: 'Gastos', data: datosMeses.map(d => d.gasto), backgroundColor: '#dc2626', borderRadius: 6 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { family: 'Orbitron', size: 10 }, color: '#64748b', usePointStyle: true } },
+                    tooltip: {
+                        backgroundColor: 'rgba(30,41,59,.94)',
+                        callbacks: { label: (c) => c.dataset.label + ': ' + formatoCLP.format(c.raw) }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#64748b', font: { family: 'Share Tech Mono' } }, grid: { color: 'rgba(0,0,0,.06)' } },
+                    y: { beginAtZero: true, ticks: { color: '#64748b', font: { family: 'Share Tech Mono' }, callback: v => '$' + (v / 1000).toFixed(0) + 'k' }, grid: { color: 'rgba(0,0,0,.06)' } }
+                }
+            }
+        });
+
+        // 9. Gráfica Ganancia
+        const ctxGan = document.getElementById('chartGanancia').getContext('2d');
+        if (chartGan) chartGan.destroy();
+        chartGan = new Chart(ctxGan, {
+            type: 'line',
+            data: {
+                labels: meses,
+                datasets: [{
+                    label: 'Ganancia Neta',
+                    data: datosMeses.map(d => d.ganancia),
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#2563eb',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(30,41,59,.94)',
+                        callbacks: { label: (c) => 'Ganancia: ' + formatoCLP.format(c.raw) }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#64748b', font: { family: 'Share Tech Mono' } }, grid: { color: 'rgba(0,0,0,.06)' } },
+                    y: { beginAtZero: true, ticks: { color: '#64748b', font: { family: 'Share Tech Mono' }, callback: v => '$' + (v / 1000).toFixed(0) + 'k' }, grid: { color: 'rgba(0,0,0,.06)' } }
+                }
+            }
+        });
+
+        // 10. Dona Egresos
+        const ctxDonaEgr = document.getElementById('chartDonaEgresos').getContext('2d');
+        if (chartDonaEgr) chartDonaEgr.destroy();
+        const egrLabels = Object.keys(gastosPorSub);
+        const egrData = Object.values(gastosPorSub);
+        const egrColors = ['#dc2626', '#d97706', '#2563eb', '#7c3aed'];
+        chartDonaEgr = new Chart(ctxDonaEgr, {
+            type: 'doughnut',
+            data: {
+                labels: egrLabels,
+                datasets: [{
+                    data: egrData,
+                    backgroundColor: egrColors.slice(0, egrLabels.length),
+                    borderColor: '#fff',
+                    borderWidth: 3,
+                    hoverOffset: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { family: 'Orbitron', size: 9 }, color: '#64748b', usePointStyle: true } },
+                    tooltip: {
+                        backgroundColor: 'rgba(30,41,59,.94)',
+                        callbacks: { label: (c) => c.label + ': ' + formatoCLP.format(c.raw) }
+                    }
+                }
+            }
+        });
+
+        // 11. Dona Ingresos
+        const ctxDonaIng = document.getElementById('chartDonaIngresos').getContext('2d');
+        if (chartDonaIng) chartDonaIng.destroy();
+        const ingLabels = Object.keys(ventasPorSub);
+        const ingData = Object.values(ventasPorSub);
+        const ingColors = ['#059669', '#2563eb'];
+        chartDonaIng = new Chart(ctxDonaIng, {
+            type: 'doughnut',
+            data: {
+                labels: ingLabels,
+                datasets: [{
+                    data: ingData,
+                    backgroundColor: ingColors.slice(0, ingLabels.length),
+                    borderColor: '#fff',
+                    borderWidth: 3,
+                    hoverOffset: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { family: 'Orbitron', size: 9 }, color: '#64748b', usePointStyle: true } },
+                    tooltip: {
+                        backgroundColor: 'rgba(30,41,59,.94)',
+                        callbacks: { label: (c) => c.label + ': ' + formatoCLP.format(c.raw) }
+                    }
+                }
+            }
+        });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       CERRAR MES - BACKUP MENSUAL
+       ═══════════════════════════════════════════════════════════════ */
+    async function cerrarMes() {
+        if (!confirm(`🔒 ¿CERRAR MES ACTUAL?
+
+Esto:
+1. Calcula totales del mes
+2. Guarda en histórico (resumen_mensual)
+3. Descarga Excel automáticamente
+4. Borra movimientos del mes
+
+¿Confirmas?`)) {
+        return;
+    }
+
+        // 1. Calcular totales del mes actual desde movimientos
+        const { data: movs, error: errMovs } = await _supabase.from('movimientos').select('*');
+        if (errMovs || !movs || movs.length === 0) {
+            alert("❌ No hay movimientos para cerrar.");
+            return;
+        }
+
+        let venta = 0, compra = 0, gasto = 0;
+        movs.forEach(m => {
+            if (m.tipo === 'venta') venta += m.monto;
+            else if (m.tipo === 'compra') compra += m.monto;
+            else if (m.tipo === 'gasto') gasto += m.monto;
+        });
+
+        const ganancia = venta - compra - gasto;
+        const margen = venta ? ((ganancia / venta) * 100).toFixed(1) : 0;
+        const ahora = new Date();
+        const mesKey = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
+
+        // 2. Guardar en resumen_mensual
+        const { error: errInsert } = await _supabase.from('resumen_mensual').insert([{
+            mes: mesKey,
+            venta: venta,
+            compras: compra,
+            gasto: gasto,
+            ganancia: ganancia,
+            margen: parseFloat(margen)
+        }]);
+
+        if (errInsert) {
+            alert("❌ Error al guardar en histórico: " + errInsert.message);
+            return;
+        }
+
+        // 3. Descargar Excel automáticamente
+        const datosExcel = movs.map(m => ({
+            Fecha: m.created_at ? new Date(m.created_at).toLocaleDateString('es-CL') : '---',
+            Tipo: m.tipo.toUpperCase(),
+            Concepto: m.concepto,
+            Subcategoria: m.subcategoria || 'General',
+            Monto: m.monto
+        }));
+        const hoja = XLSX.utils.json_to_sheet(datosExcel);
+        const libro = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(libro, hoja, "Finanzas");
+        XLSX.writeFile(libro, `Backup_${mesKey}.xlsx`);
+
+        // 4. Borrar movimientos
+        const { error: errDel } = await _supabase.from('movimientos').delete().neq('id', 0);
+        if (errDel) {
+            alert("⚠️ Guardado en histórico, pero error al limpiar movimientos: " + errDel.message);
+            return;
+        }
+
+        // 5. Recargar datos
+        await cargarDatosDesdeNube();
+        renderDashboard();
+
+        alert(`✅ MES CERRADO EXITOSAMENTE
+
+📊 Resumen ${mesKey}:
+• Ventas: ${formatoCLP.format(venta)}
+• Compras: ${formatoCLP.format(compra)}
+• Gastos: ${formatoCLP.format(gasto)}
+• Ganancia: ${formatoCLP.format(ganancia)}
+
+📥 Excel descargado: Backup_${mesKey}.xlsx
+☁️ Guardado en resumen_mensual
+🗑️ Movimientos limpiados`);
+    }
+
+    /* ─── Rendimiento: lista completa ─── */
+    function renderRendimiento() {
+        const container = document.getElementById('rendimiento-content');
+        if (movimientos.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>No hay movimientos registrados todavía.</p></div>';
+            return;
+        }
+        let html = '<div style="display:grid;gap:8px;">';
+        movimientos.slice().reverse().forEach(m => {
+            const color = m.tipo === 'venta' ? 'var(--electrico-verde)' : 'var(--electrico-rojo)';
+            const icon = m.tipo === 'venta' ? '➕' : m.tipo === 'compra' ? '➖' : '💸';
+            const fecha = m.created_at ? new Date(m.created_at).toLocaleDateString('es-CL') : '---';
+            html += `
+                <div class="hist-item">
+                    <div>
+                        <strong>${icon} ${fecha} · ${m.concepto}</strong><br>
+                        <small>${m.subcategoria || 'General'} | Tipo: ${m.tipo.toUpperCase()} | <span style="color:${color};font-weight:700;">${formatoCLP.format(m.monto)}</span></small>
+                    </div>
+                    <button class="delete-btn" onclick="borrarRegistro('${m.id}')">Eliminar</button>
+                </div>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    /* ─── CRUD ─── */
+    async function registrar() {
+        const tipo = document.getElementById('tipo').value;
+        const monto = parseFloat(document.getElementById('monto').value);
+        const concepto = document.getElementById('concepto').value.trim();
+        const subcategoria = document.getElementById('subcategoria').value;
+
+        if (!monto || !concepto) {
+            alert("Por favor, completa el monto y el concepto.");
+            return;
+        }
+
+        const { error } = await _supabase.from('movimientos').insert([{ tipo, concepto, monto, subcategoria }]);
+        if (!error) {
+            await cargarDatosDesdeNube();
+            document.getElementById('monto').value = '';
+            document.getElementById('concepto').value = '';
+            alert("✅ Registro guardado en la nube orbital.");
+        } else {
+            console.error("Error de Supabase:", error);
+            alert("❌ Error al guardar: " + error.message);
+        }
+    }
+
+    async function borrarRegistro(id) {
+        if (!confirm("¿Deseas eliminar este registro permanentemente de la nube?")) return;
+        const { error } = await _supabase.from('movimientos').delete().eq('id', id);
+        if (!error) cargarDatosDesdeNube();
+    }
+
+    async function reiniciarMes() {
+        if (confirm("¿Seguro que quieres borrar todo el log de la nube?")) {
+            const { error } = await _supabase.from('movimientos').delete().neq('id', 0);
+            if (!error) {
+                movimientos = [];
+                actualizarInterfaz();
+            }
+        }
+    }
+
+    function exportarExcel() {
+        if (movimientos.length === 0) {
+            alert("No hay datos galácticos para exportar.");
+            return;
+        }
+        const datosExcel = movimientos.map(m => ({
+            Fecha: m.created_at ? new Date(m.created_at).toLocaleDateString('es-CL') : '---',
+            Tipo: m.tipo.toUpperCase(),
+            Concepto: m.concepto,
+            Subcategoria: m.subcategoria || 'General',
+            Monto: m.monto
+        }));
+        const hoja = XLSX.utils.json_to_sheet(datosExcel);
+        const libro = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(libro, hoja, "Finanzas");
+        const nombreArchivo = `Reporte_CryptoWallet_${new Date().toISOString().slice(0,10)}.xlsx`;
+        XLSX.writeFile(libro, nombreArchivo);
+    }
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./service-worker.js').catch(err => console.log("SW no registrado", err));
+        });
+    }
+</script>
+</body>
+</html>
