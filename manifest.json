@@ -1,7 +1,7 @@
 {
   "name": "CryptoWallet - Consola de Comando",
   "short_name": "CryptoWallet",
-  "description": "Centro de control financiero",
+  "description": "Centro de control financiero v3",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f0f4f8",
