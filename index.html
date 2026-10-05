@@ -894,12 +894,13 @@
                     </div>
 
                     <button class="btn-main" onclick="registrar()">&#128190; Guardar Registro</button>
-                    <button class="btn-excel" onclick="exportarExcel()">&#128229; Excel Detallado</button>
+                    <button class="btn-excel" onclick="exportarExcel()">&#128229; Excel mes actual</button>
+                    <button class="btn-excel" onclick="exportarExcelCompleto()" style="background:linear-gradient(135deg,#1e40af,#3b82f6)!important;margin-top:8px;">&#128202; Excel TODO el historial</button>
                     <button class="btn-soft" onclick="importarExcel()" style="margin-top:8px; border-color:rgba(37,99,235,.25); color:var(--electrico-azul); font-weight:700;">
                         &#128226; Importar desde Excel
                     </button>
                     <div style="margin-top:14px;padding:8px 12px;background:rgba(37,99,235,.06);border-radius:12px;border:1px solid rgba(37,99,235,.1);font-family:var(--fuente-titulo);color:var(--electrico-azul);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;">📅 Movimientos del mes actual</div><div id="historial"></div>
-                    <button class="btn-soft" onclick="reiniciarMes()">&#10060; Limpiar datos fin de mes (&#9888; No guarda en histórico)</button>
+                    <button class="btn-soft" onclick="reiniciarMes()" style="margin-top:10px;border-color:rgba(220,38,38,.3);color:var(--electrico-rojo);">&#10060; Limpiar SOLO mes actual (&#9888; no toca otros meses)</button>
                 </div>
 
                 <div class="card">
@@ -1711,7 +1712,7 @@
        ═══════════════════════════════════════════════════════════════ */
     async function cerrarMes() {
         sfxClick();
-        if (!confirm('&#128274; ¿CERRAR MES ACTUAL?\n\nEsto:\n1. Calcula totales del mes\n2. Guarda en histórico (resumen_mensual)\n3. Descarga Excel automáticamente\n4. Borra movimientos del mes\n\n¿Confirmas?')) {
+        if (!confirm('🔒 ¿CERRAR MES ACTUAL?\n\nEsto SOLO:\n1. Calcula totales del mes\n2. Guarda resumen en histórico (resumen_mensual)\n3. Descarga Excel de respaldo\n\nNO se borrará nada todavía.\n\n¿Continuar?')) {
             return;
         }
 
@@ -1790,38 +1791,39 @@
             XLSX.utils.book_append_sheet(libro, hoja, "Finanzas");
             XLSX.writeFile(libro, 'Backup_' + mesKey + '.xlsx');
 
-            // 4. Borrar SOLO los movimientos del mes que se está cerrando (seguro)
-            const inicioMes = mesKey + '-01T00:00:00+00:00';
-            // Calculamos el primer día del mes siguiente
-            const [yy, mm] = mesKey.split('-').map(Number);
-            const nextM = mm === 12 ? 1 : mm + 1;
-            const nextY = mm === 12 ? yy + 1 : yy;
-            const finMes = nextY + '-' + String(nextM).padStart(2,'0') + '-01T00:00:00+00:00';
+            // 4. Preguntar si quiere BORRAR los movimientos del mes (opcional y seguro)
+            const quiereBorrar = confirm(
+                '✅ Resumen guardado y Excel descargado.\n\n' +
+                '¿Quieres AHORA borrar los movimientos del mes ' + mesKey + ' de la tabla abierta?\n\n' +
+                '• SÍ = limpia solo ese mes (los otros meses NO se tocan)\n' +
+                '• NO = deja todo como está (recomendado si quieres seguir viendo el detalle)'
+            );
 
-            const { error: errDel } = await _supabase
-                .from('movimientos')
-                .delete()
-                .gte('created_at', inicioMes)
-                .lt('created_at', finMes);
+            if (quiereBorrar) {
+                const inicioMes = mesKey + '-01T00:00:00+00:00';
+                const [yy, mm] = mesKey.split('-').map(Number);
+                const nextM = mm === 12 ? 1 : mm + 1;
+                const nextY = mm === 12 ? yy + 1 : yy;
+                const finMes = nextY + '-' + String(nextM).padStart(2,'0') + '-01T00:00:00+00:00';
 
-            if (errDel) {
-                showToast('Guardado en histórico, pero error al limpiar: ' + errDel.message, 'warning', 5000);
-                await cargarDatosDesdeNube();
-                renderDashboard();
-                updateStatus('online');
-                return;
+                const { error: errDel } = await _supabase
+                    .from('movimientos')
+                    .delete()
+                    .gte('created_at', inicioMes)
+                    .lt('created_at', finMes);
+
+                if (errDel) {
+                    showToast('Histórico OK, pero error al limpiar: ' + errDel.message, 'warning', 5000);
+                } else {
+                    showToast('Mes ' + mesKey + ' cerrado y limpiado. Ventas: ' + formatoCLP.format(venta), 'success', 6000);
+                }
+            } else {
+                showToast('Mes ' + mesKey + ' cerrado en histórico. Movimientos siguen visibles.', 'success', 6000);
             }
 
-            // 5. Recargar datos
-            movimientos = [];
-            actualizarInterfaz();
+            // 5. Recargar
+            await cargarDatosDesdeNube();
             renderDashboard();
-
-            showToast(
-                'MES CERRADO: ' + mesKey + ' | Ventas: ' + formatoCLP.format(venta) + ' | Ganancia: ' + formatoCLP.format(ganancia),
-                'success',
-                6000
-            );
             updateStatus('online');
         } catch(err) {
             console.error(err);
@@ -2016,7 +2018,7 @@
     function exportarExcel() {
         sfxClick();
         if (movimientos.length === 0) {
-            showToast("No hay datos gal&aacute;cticos para exportar.", 'warning');
+            showToast("No hay movimientos abiertos para exportar.", 'warning');
             return;
         }
         const datosExcel = movimientos.map(m => ({
@@ -2028,10 +2030,72 @@
         }));
         const hoja = XLSX.utils.json_to_sheet(datosExcel);
         const libro = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(libro, hoja, "Finanzas");
-        const nombreArchivo = "Reporte_CryptoWallet_" + new Date().toISOString().slice(0,10) + ".xlsx";
+        XLSX.utils.book_append_sheet(libro, hoja, "Mes_Actual_Abiertos");
+        const nombreArchivo = "Excel_MesActual_" + new Date().toISOString().slice(0,10) + ".xlsx";
         XLSX.writeFile(libro, nombreArchivo);
-        showToast('Excel descargado: ' + nombreArchivo, 'success');
+        showToast('Excel mes actual: ' + nombreArchivo, 'success');
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       EXCEL COMPLETO: histórico (resumen_mensual) + movimientos abiertos
+       ═══════════════════════════════════════════════════════════════ */
+    async function exportarExcelCompleto() {
+        sfxClick();
+        updateStatus('sync');
+        try {
+            const { data: historico, error: errH } = await _supabase
+                .from('resumen_mensual')
+                .select('*')
+                .order('mes', { ascending: true });
+            if (errH) throw errH;
+
+            const { data: actual, error: errA } = await _supabase
+                .from('movimientos')
+                .select('*')
+                .order('created_at', { ascending: true });
+            if (errA) throw errA;
+
+            const libro = XLSX.utils.book_new();
+
+            // Hoja 1: Resumen mensual cerrado
+            const filasResumen = (historico || []).map(h => ({
+                Mes: h.mes,
+                Ventas: Number(h.venta) || 0,
+                Compras: Number(h.compras) || 0,
+                Gastos: Number(h.gasto) || 0,
+                Ganancia: Number(h.ganancia) || 0,
+                Margen_pct: h.margen != null ? h.margen : ''
+            }));
+            if (filasResumen.length === 0) {
+                filasResumen.push({ Mes: 'Sin meses cerrados', Ventas: 0, Compras: 0, Gastos: 0, Ganancia: 0, Margen_pct: '' });
+            }
+            const hojaResumen = XLSX.utils.json_to_sheet(filasResumen);
+            XLSX.utils.book_append_sheet(libro, hojaResumen, "Resumen_Mensual");
+
+            // Hoja 2: Todos los movimientos abiertos
+            const filasMovs = (actual || []).map(m => ({
+                Fecha: m.created_at ? new Date(m.created_at).toLocaleDateString('es-CL') : '---',
+                Tipo: (m.tipo || '').toUpperCase(),
+                Concepto: m.concepto || '',
+                Subcategoria: m.subcategoria || 'General',
+                Monto: Number(m.monto) || 0,
+                ID: m.id
+            }));
+            if (filasMovs.length === 0) {
+                filasMovs.push({ Fecha: 'Sin movimientos abiertos', Tipo: '', Concepto: '', Subcategoria: '', Monto: 0, ID: '' });
+            }
+            const hojaMovs = XLSX.utils.json_to_sheet(filasMovs);
+            XLSX.utils.book_append_sheet(libro, hojaMovs, "Movimientos_Abiertos");
+
+            const nombre = "Excel_Historial_Completo_" + new Date().toISOString().slice(0,10) + ".xlsx";
+            XLSX.writeFile(libro, nombre);
+            showToast('Excel completo descargado: ' + nombre + ' (' + filasResumen.length + ' meses + ' + (actual ? actual.length : 0) + ' movs)', 'success', 5000);
+            updateStatus('online');
+        } catch (err) {
+            console.error(err);
+            showToast('Error al generar Excel completo: ' + (err.message || err), 'error', 6000);
+            updateStatus('offline');
+        }
     }
 
     /* ═══════════════════════════════════════════════════════════════
