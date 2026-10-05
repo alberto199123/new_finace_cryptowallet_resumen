@@ -1017,8 +1017,9 @@
     </div>
 </div>
 <script>
-    const SUPABASE_URL = 'https://kczvfdwvbarmwplbxjta.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_4jmmQT8cRJ3K17HlTPo7Rw_hhn7co4l';
+    // ⚠️ PEGA AQUÍ TUS NUEVAS CLAVES (nunca subas la service_role)
+    const SUPABASE_URL = 'https://kczvfdwvbarmwplbxjta.supabase.co/rest/v1/';
+    const SUPABASE_KEY = 'sb_publishable_5AOA4WDcUoEquobNLr449w_Da7zurY-';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const CLAVE_MAESTRA = "1991";
     let movimientos = [];
@@ -1212,12 +1213,19 @@
             const { data, error } = await _supabase.from('movimientos').select('*').order('created_at', { ascending: true });
             if (error) throw error;
             movimientos = data || [];
+            console.log('Movimientos cargados:', movimientos.length);
             updateStatus('online');
             actualizarInterfaz();
+            // Si estamos en pestaña rendimiento o dashboard, refrescar
+            const tabRend = document.getElementById('tab-rendimiento');
+            const tabDash = document.getElementById('tab-dashboard');
+            if (tabRend && tabRend.classList.contains('active')) renderRendimiento();
+            if (tabDash && tabDash.classList.contains('active')) renderDashboard();
         } catch(err) {
             console.error('Error cargando datos:', err);
             updateStatus('offline');
-            showToast('Error de conexi&oacute;n con la base orbital', 'error');
+            const msg = (err && err.message) ? err.message : (err && err.error_description) ? err.error_description : String(err);
+            showToast('Error de conexión: ' + msg, 'error', 8000);
         }
     }
 
@@ -1290,20 +1298,22 @@
        ═══════════════════════════════════════════════════════════════ */
     function actualizarInterfaz() {
         const mesActual = getMesActual();
+        // Solo el mes actual para el panel principal de Registro
         const movsMesActual = movimientos.filter(m => {
-            if (!m.created_at) return true; // sin fecha = asumir actual
+            if (!m.created_at) return true;
             return getMesFromDate(m.created_at).sortKey === mesActual;
         });
 
         let v = 0, eg = 0;
         const totalesPorSub = {};
         const hist = document.getElementById('historial');
-
-        // Mostrar etiqueta del mes actual
         const mesLabel = getMesLabelActual();
+        const totalAbiertos = movimientos.length;
 
         if (movsMesActual.length === 0) {
-            hist.innerHTML = '<div class="hist-item"><div><strong>LOG DE ACTIVIDAD &mdash; ' + mesLabel + '</strong><br><small>No hay movimientos registrados para este mes.</small></div></div>';
+            hist.innerHTML = '<div class="hist-item"><div><strong>LOG DE ACTIVIDAD &mdash; ' + mesLabel + '</strong><br>' +
+                '<small>No hay movimientos del mes actual.</small><br>' +
+                '<small style="color:var(--electrico-ambar);">Total registros abiertos en la nube: ' + totalAbiertos + ' (véalos en pestaña Rendimiento)</small></div></div>';
         } else {
             hist.innerHTML = movsMesActual.slice().reverse().map((m, idx) => {
                 const color = m.tipo === 'venta' ? 'var(--electrico-verde)' : 'var(--electrico-rojo)';
@@ -1781,8 +1791,20 @@
             XLSX.utils.book_append_sheet(libro, hoja, "Finanzas");
             XLSX.writeFile(libro, 'Backup_' + mesKey + '.xlsx');
 
-            // 4. Borrar movimientos
-            const { error: errDel } = await _supabase.from('movimientos').delete().neq('id', 0);
+            // 4. Borrar SOLO los movimientos del mes que se está cerrando (seguro)
+            const inicioMes = mesKey + '-01T00:00:00+00:00';
+            // Calculamos el primer día del mes siguiente
+            const [yy, mm] = mesKey.split('-').map(Number);
+            const nextM = mm === 12 ? 1 : mm + 1;
+            const nextY = mm === 12 ? yy + 1 : yy;
+            const finMes = nextY + '-' + String(nextM).padStart(2,'0') + '-01T00:00:00+00:00';
+
+            const { error: errDel } = await _supabase
+                .from('movimientos')
+                .delete()
+                .gte('created_at', inicioMes)
+                .lt('created_at', finMes);
+
             if (errDel) {
                 showToast('Guardado en histórico, pero error al limpiar: ' + errDel.message, 'warning', 5000);
                 await cargarDatosDesdeNube();
@@ -1969,11 +1991,22 @@
 
         updateStatus('sync');
         try {
-            const { error } = await _supabase.from('movimientos').delete().neq('id', 0);
+            // Solo borra el mes actual (no toda la tabla)
+            const mesKey = getMesActual();
+            const inicioMes = mesKey + '-01T00:00:00+00:00';
+            const [yy, mm] = mesKey.split('-').map(Number);
+            const nextM = mm === 12 ? 1 : mm + 1;
+            const nextY = mm === 12 ? yy + 1 : yy;
+            const finMes = nextY + '-' + String(nextM).padStart(2,'0') + '-01T00:00:00+00:00';
+
+            const { error } = await _supabase
+                .from('movimientos')
+                .delete()
+                .gte('created_at', inicioMes)
+                .lt('created_at', finMes);
             if (error) throw error;
-            movimientos = [];
-            actualizarInterfaz();
-            showToast('Datos del mes limpiados. Recuerda usar Cerrar Mes la próxima vez.', 'warning', 5000);
+            await cargarDatosDesdeNube();
+            showToast('Datos del mes actual limpiados. Los otros meses siguen intactos.', 'warning', 5000);
             updateStatus('online');
         } catch(err) {
             showToast('Error al limpiar: ' + err.message, 'error');
