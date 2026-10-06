@@ -9,10 +9,28 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "icono-ovni.png",
+      "src": "icono-ovni-192x192-transparente.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icono-ovni-192x192-transparente.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icono-ovni-512x512-transparente.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
-    }  
+      "purpose": "any"
+    },
+    {
+      "src": "icono-ovni-512x512-transparente.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
