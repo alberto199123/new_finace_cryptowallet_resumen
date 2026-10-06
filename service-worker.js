@@ -3,7 +3,8 @@ const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './manifest.json',
-    './icono-ovni.png'
+    './icono-ovni-192x192-transparente.png',
+    './icono-ovni-512x512-transparente.png'
 ];
 
 // Evento de instalación: Almacena los archivos estáticos
