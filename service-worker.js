@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cryptowallet-cache-v5';
+const CACHE_NAME = 'cryptowallet-cache-v4';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -32,14 +32,38 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
-// Evento fetch: Sirve desde caché si está disponible, sino va a la red
+// Evento fetch: network-first para HTML (actualización forzada), cache-first para el resto
 self.addEventListener('fetch', (event) => {
-    // Excluye las peticiones a Supabase y APIs externas de la caché estática
     if (!event.request.url.startsWith('http')) return;
     if (event.request.url.includes('supabase.co')) return;
 
+    const url = new URL(event.request.url);
+    const isHTML = event.request.mode === 'navigate' ||
+        url.pathname.endsWith('.html') ||
+        url.pathname.endsWith('/') ||
+        url.pathname.endsWith('/index.html');
+
+    if (isHTML) {
+        // HTML: red primero, si falla usa caché
+        event.respondWith(
+            fetch(event.request)
+                .then((response) => {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+                    return response;
+                })
+                .catch(() => caches.match(event.request))
+        );
+        return;
+    }
+
+    // Assets: caché primero
     event.respondWith(
         caches.match(event.request)
-        .then((response) => response || fetch(event.request))
+            .then((response) => response || fetch(event.request).then((res) => {
+                const clone = res.clone();
+                caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+                return res;
+            }))
     );
 });
