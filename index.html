@@ -901,25 +901,7 @@
 
                     <button class="btn-main" onclick="registrar()">&#128190; Guardar Registro</button>
                     <button class="btn-excel" onclick="exportarExcel()">&#128229; Excel mes actual</button>
-                    
-                    <!-- ===== NUEVO: Excel mes espec&iacute;fico ===== -->
-                    <div style="margin-top:12px;padding:12px;border:1px solid rgba(16,124,16,.25);border-radius:14px;background:rgba(16,124,16,.04);">
-                        <label style="font-family:var(--fuente-titulo);font-size:.7rem;color:var(--excel-solid);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:8px;">&#128197; Excel mes espec&iacute;fico</label>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                            <select id="mesEspecifico" style="flex:1;min-width:120px;">
-                                <option value="01">Enero</option>
-                                <option value="08">Agosto</option>
-                                <option value="12">Diciembre</option>
-                            </select>
-                            <select id="anioEspecifico" style="flex:1;min-width:100px;">
-                                <option value="2024">2024</option>
-                                <option value="2025">2025</option>
-                                <option value="2026" selected>2026</option>
-                                <option value="2027">2027</option>
-                            </select>
-                        </div>
-                        <button class="btn-excel" onclick="exportarExcelMesEspecifico()" style="width:100%;margin-top:8px;">&#128197; Descargar Excel del mes</button>
-                    </div>
+                    <button class="btn-excel" onclick="exportarExcelPorMeses()" style="background:linear-gradient(135deg,#1e40af,#3b82f6)!important;margin-top:8px;">&#128197; Excel por mes (elegir)</button>
                     <button class="btn-soft" onclick="importarExcel()" style="margin-top:8px; border-color:rgba(37,99,235,.25); color:var(--electrico-azul); font-weight:700;">
                         &#128226; Importar desde Excel
                     </button>
@@ -1852,94 +1834,6 @@
         } catch(err) {
             console.error(err);
             showToast('Error inesperado: ' + err.message, 'error', 5000);
-    }
-
-    /* ════════════════════════════════════════════════════════
-       EXCEL MES ESPECIFICO (enero, agosto, diciembre, etc.)
-       ═══════════════════════════════════════════════════════════
-    */
-    async function exportarExcelMesEspecifico() {
-        sfxClick();
-        const mesValor = document.getElementById('mesEspecifico').value;
-        const anioValor = document.getElementById('anioEspecifico').value;
-        if (!mesValor || !anioValor) {
-            showToast('Selecciona mes y año.', 'warning');
-            return;
-        }
-        const sortKey = anioValor + '-' + mesValor;
-        const mesesNombres = {
-            '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
-            '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
-            '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
-        };
-        const mesNombre = mesesNombres[mesValor] || mesValor;
-        updateStatus('sync');
-        try {
-            // 1. Buscar en historico (resumen_mensual)
-            const { data: historico, error: errH } = await _supabase
-                .from('resumen_mensual')
-                .select('*');
-            if (errH) throw errH;
-            const resumenMes = (historico || []).find(h => toSortKey(h.mes) === sortKey);
-            // 2. Buscar movimientos abiertos de ese mes
-            const { data: movs, error: errM } = await _supabase
-                .from('movimientos')
-                .select('*')
-                .order('created_at', { ascending: true });
-            if (errM) throw errM;
-            const movsMes = (movs || []).filter(m =>
-                m.created_at && getMesFromDate(m.created_at).sortKey === sortKey
-            );
-            // 3. Verificar que haya datos
-            if (!resumenMes && movsMes.length === 0) {
-                showToast('Sin datos para ' + mesNombre + ' ' + anioValor + '. Verifica mes/año, o que el mes esté cerrado/abierto.', 'warning', 5000);
-                updateStatus('online');
-                return;
-            }
-            // 4. Construir Excel
-            const libro = XLSX.utils.book_new();
-            let hojasCreadas = 0;
-            // Hoja 1: Resumen (si el mes esta cerrado en historico)
-            if (resumenMes) {
-                const filaResumen = [{
-                    Mes: formatMesLabel(resumenMes.mes),
-                    Ventas: Number(resumenMes.venta) || 0,
-                    Compras: Number(resumenMes.compras) || 0,
-                    Gastos: Number(resumenMes.gasto) || 0,
-                    Ganancia: Number(resumenMes.ganancia) || 0,
-                    Margen_pct: resumenMes.margen != null ? resumenMes.margen : ''
-                }];
-                const hojaResumen = XLSX.utils.json_to_sheet(filaResumen);
-                XLSX.utils.book_append_sheet(libro, hojaResumen, 'Resumen_Mes');
-                hojasCreadas++;
-            }
-            // Hoja 2: Movimientos detallados (si hay abiertos)
-            if (movsMes.length > 0) {
-                const filasMovs = movsMes.map(m => ({
-                    Fecha: m.created_at ? new Date(m.created_at).toLocaleDateString('es-CL') : '---',
-                    Tipo: (m.tipo || '').toUpperCase(),
-                    Concepto: m.concepto || '',
-                    Subcategoria: m.subcategoria || 'General',
-                    Monto: Number(m.monto) || 0,
-                    ID: m.id
-                }));
-                const hojaMovs = XLSX.utils.json_to_sheet(filasMovs);
-                XLSX.utils.book_append_sheet(libro, hojaMovs, 'Movimientos_Mes');
-                hojasCreadas++;
-            }
-            if (hojasCreadas === 0) {
-                showToast('No se pudo generar el Excel.', 'error');
-                updateStatus('offline');
-                return;
-            }
-            const nombre = 'Excel_' + mesNombre + '_' + anioValor + '.xlsx';
-            XLSX.writeFile(libro, nombre);
-            const detalle = (resumenMes ? '1 resumen' : '0 resumen') + ' + ' + movsMes.length + ' movs';
-            showToast('Excel descargado: ' + nombre + ' (' + detalle + ')', 'success', 5000);
-            updateStatus('online');
-        } catch (err) {
-            console.error(err);
-            showToast('Error al generar Excel del mes: ' + (err.message || err), 'error', 6000);
             updateStatus('offline');
         }
     }
@@ -2146,6 +2040,124 @@
         const nombreArchivo = "Excel_MesActual_" + new Date().toISOString().slice(0,10) + ".xlsx";
         XLSX.writeFile(libro, nombreArchivo);
         showToast('Excel mes actual: ' + nombreArchivo, 'success');
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       EXCEL POR MES: eliges qué meses descargar (no todo de golpe)
+       ═══════════════════════════════════════════════════════════════ */
+    async function exportarExcelPorMeses() {
+        sfxClick();
+        updateStatus('sync');
+        try {
+            const { data: historico, error: errH } = await _supabase
+                .from('resumen_mensual')
+                .select('*')
+                .order('mes', { ascending: true });
+            if (errH) throw errH;
+
+            const { data: actual, error: errA } = await _supabase
+                .from('movimientos')
+                .select('*')
+                .order('created_at', { ascending: true });
+            if (errA) throw errA;
+
+            const mesesSet = new Set();
+            (historico || []).forEach(h => { if (h.mes) mesesSet.add(h.mes); });
+            (actual || []).forEach(m => {
+                if (m.created_at) {
+                    const d = new Date(m.created_at);
+                    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                    mesesSet.add(key);
+                }
+            });
+            const mesesDisponibles = Array.from(mesesSet).sort();
+
+            if (mesesDisponibles.length === 0) {
+                showToast('No hay meses con datos para exportar.', 'warning');
+                updateStatus('online');
+                return;
+            }
+
+            const listaTexto = mesesDisponibles.join(', ');
+            const entrada = prompt(
+                'Meses disponibles:\n' + listaTexto +
+                '\n\nEscribe los meses que quieres descargar (YYYY-MM separados por coma).\n' +
+                'Ejemplo: 2026-08, 2026-09\n' +
+                'O escribe "todos" para bajar todos.',
+                mesesDisponibles[mesesDisponibles.length - 1]
+            );
+
+            if (entrada === null) {
+                updateStatus('online');
+                return;
+            }
+
+            let mesesElegidos;
+            const texto = entrada.trim().toLowerCase();
+            if (texto === 'todos' || texto === 'todo' || texto === '*') {
+                mesesElegidos = mesesDisponibles;
+            } else {
+                mesesElegidos = entrada.split(',')
+                    .map(s => s.trim())
+                    .filter(s => /^\d{4}-\d{2}$/.test(s))
+                    .filter(m => mesesSet.has(m));
+            }
+
+            if (mesesElegidos.length === 0) {
+                showToast('Ningún mes válido. Usa formato YYYY-MM (ej: 2026-09)', 'error');
+                updateStatus('online');
+                return;
+            }
+
+            const libro = XLSX.utils.book_new();
+
+            const filasResumen = (historico || [])
+                .filter(h => mesesElegidos.includes(h.mes))
+                .map(h => ({
+                    Mes: h.mes,
+                    Ventas: Number(h.venta) || 0,
+                    Compras: Number(h.compras) || 0,
+                    Gastos: Number(h.gasto) || 0,
+                    Ganancia: Number(h.ganancia) || 0,
+                    Margen_pct: h.margen != null ? h.margen : ''
+                }));
+            if (filasResumen.length === 0) {
+                filasResumen.push({ Mes: 'Sin resumen cerrado en selección', Ventas: 0, Compras: 0, Gastos: 0, Ganancia: 0, Margen_pct: '' });
+            }
+            XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(filasResumen), "Resumen_Mensual");
+
+            const filasMovs = (actual || [])
+                .filter(m => {
+                    if (!m.created_at) return false;
+                    const d = new Date(m.created_at);
+                    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                    return mesesElegidos.includes(key);
+                })
+                .map(m => ({
+                    Fecha: m.created_at ? new Date(m.created_at).toLocaleDateString('es-CL') : '---',
+                    Tipo: (m.tipo || '').toUpperCase(),
+                    Concepto: m.concepto || '',
+                    Subcategoria: m.subcategoria || 'General',
+                    Monto: Number(m.monto) || 0,
+                    ID: m.id
+                }));
+            if (filasMovs.length === 0) {
+                filasMovs.push({ Fecha: 'Sin movimientos en selección', Tipo: '', Concepto: '', Subcategoria: '', Monto: 0, ID: '' });
+            }
+            XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(filasMovs), "Movimientos");
+
+            const etiquetaMeses = mesesElegidos.length <= 3
+                ? mesesElegidos.join('_')
+                : mesesElegidos[0] + '_a_' + mesesElegidos[mesesElegidos.length - 1];
+            const nombre = "Excel_Meses_" + etiquetaMeses + "_" + new Date().toISOString().slice(0,10) + ".xlsx";
+            XLSX.writeFile(libro, nombre);
+            showToast('Excel descargado: ' + mesesElegidos.length + ' mes(es) · ' + filasMovs.length + ' movs', 'success', 5000);
+            updateStatus('online');
+        } catch (err) {
+            console.error(err);
+            showToast('Error al generar Excel por mes: ' + (err.message || err), 'error', 6000);
+            updateStatus('offline');
+        }
     }
 
     /* ═══════════════════════════════════════════════════════════════
